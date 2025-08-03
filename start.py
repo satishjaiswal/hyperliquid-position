@@ -248,18 +248,19 @@ def launch_application():
         print(f"❌ Python executable not found at: {python_exe}")
         sys.exit(1)
     
-    app_file = Path("send_positions.py")
+    app_file = Path("unified_monitor.py")
     if not app_file.exists():
-        print("❌ send_positions.py not found")
+        print("❌ unified_monitor.py not found")
         sys.exit(1)
     
-    print("🎯 Starting Hyperliquid Position Monitor...")
+    print("🎯 Starting Hyperliquid Unified Monitor...")
+    print("💡 Includes both scheduled updates AND interactive bot commands")
     print("💡 Use Ctrl+C to stop the application")
     print("=" * 60)
     
     try:
-        # Launch the application
-        subprocess.run([str(python_exe), 'send_positions.py'], check=True)
+        # Launch the unified application
+        subprocess.run([str(python_exe), 'unified_monitor.py'], check=True)
     except subprocess.CalledProcessError as e:
         print(f"\n❌ Application exited with error: {e}")
         sys.exit(1)

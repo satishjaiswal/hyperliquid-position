@@ -7,6 +7,9 @@ A Python CLI tool that connects to Hyperliquid using a wallet API key, fetches d
 - **Real-time Position Monitoring**: Fetch live perpetual positions from Hyperliquid
 - **Account Metrics**: Track account equity, margin usage, leverage, and PnL
 - **Telegram Integration**: Receive formatted updates via Telegram bot
+- **On-Demand Price Lookup**: `/prices` command for instant token price checks
+- **On-Demand Position Updates**: `/position` command for instant position and account summary
+- **Interactive Telegram Bot**: Responds to commands and provides help
 - **Automated Setup**: One-command setup with virtual environment management
 - **Rich Console Output**: Beautiful terminal interface with tables and colors
 - **Comprehensive Logging**: Dual logging (console + hourly log files)
@@ -54,16 +57,21 @@ This will:
 - Install dependencies
 - Validate configuration
 - Test connectivity
-- Launch the monitor
+- Launch the unified monitor
 
 **Manual Launch (after setup):**
 ```bash
-python send_positions.py
+python unified_monitor.py
 ```
 
 **Run Once (no continuous monitoring):**
 ```bash
-python send_positions.py --once
+python unified_monitor.py --once
+```
+
+**Interactive Bot Only:**
+```bash
+python telegram_bot.py
 ```
 
 ## 📊 Data Tracked
@@ -184,6 +192,7 @@ You're now ready to send messages from your Python app to Telegram! 🚀
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token | Required |
 | `TELEGRAM_CHAT_ID` | Telegram chat ID | Required |
 | `REFRESH_INTERVAL_SECONDS` | Update frequency | 300 (5 minutes) |
+| `PRICE_SYMBOLS` | Comma-separated list of tokens for `/prices` command | BTC,ETH,SOL |
 
 ### Command Line Options
 
@@ -198,12 +207,16 @@ python send_positions.py --help
 ```
 hyperliquid-position/
 ├── start.py              # Automated setup and launch script
-├── send_positions.py     # Main CLI application
+├── unified_monitor.py    # Main unified service (scheduled + bot commands)
+├── send_positions.py     # Legacy CLI application (scheduled only)
+├── telegram_bot.py       # Legacy interactive bot (commands only)
 ├── requirements.txt      # Python dependencies
 ├── .env                 # Environment variables (your config)
 ├── .env.example         # Template for environment variables
 ├── logs/                # Log files (auto-created)
-│   └── app_YYYY-MM-DD_HH.log
+│   ├── main_YYYY-MM-DD_HH.log      # Main application logs
+│   ├── positions_YYYY-MM-DD_HH.log # Position monitoring logs
+│   └── bot_YYYY-MM-DD_HH.log       # Bot interaction logs
 ├── venv/                # Virtual environment (auto-created)
 └── README.md            # This file
 ```
@@ -216,11 +229,17 @@ hyperliquid-position/
 - Progress indicators
 - Error highlighting
 
-### File Logging
-- Hourly log rotation: `logs/app_2025-01-03_14.log`
-- Structured logging with timestamps
-- API request/response details
-- Error stack traces
+### File Logging (Unified Monitor)
+- **Main Application**: `logs/main_2025-01-03_14.log`
+  - Application lifecycle, configuration, errors
+- **Position Monitoring**: `logs/positions_2025-01-03_14.log`
+  - Scheduled position updates, API calls, data processing
+- **Bot Interactions**: `logs/bot_2025-01-03_14.log`
+  - Telegram command processing, user interactions
+
+### File Logging (Legacy Applications)
+- **send_positions.py**: `logs/app_2025-01-03_14.log`
+- **telegram_bot.py**: Standard console logging
 
 ### Log Levels
 - `INFO`: Normal operations, API calls, Telegram sends
@@ -244,6 +263,114 @@ Fetches current data, sends to Telegram, and exits.
 
 ### Custom Refresh Interval
 Set `REFRESH_INTERVAL_SECONDS=60` in `.env` for 1-minute updates.
+
+### Interactive Telegram Bot
+```bash
+python telegram_bot.py
+```
+Runs the interactive Telegram bot that responds to commands:
+- `/prices` - Get current token prices for configured symbols
+- `/help` - Show available commands and configuration
+- `/start` - Same as `/help`
+
+## 🤖 Telegram Bot Commands
+
+### Interactive Inline Buttons
+
+When you send `/start` to the bot, you'll receive an interactive menu with clickable buttons:
+
+```
+🤖 Hyperliquid Bot Menu
+
+Welcome! Use the buttons below to interact with your Hyperliquid account:
+
+📈 Prices - Get current token prices
+📊 Position - View positions and account summary  
+ℹ️ Help - Show detailed help information
+
+👇 Select a command:
+
+[📈 Prices] [📊 Position]
+      [ℹ️ Help]
+```
+
+**How to Use:**
+- Send `/start` to get the interactive menu
+- Click any button to execute the corresponding command
+- No need to type commands manually!
+
+### `/prices` Command
+Get instant price updates for your configured tokens:
+
+**Example Response:**
+```
+📈 Current Token Prices
+
+• BTC: $114,023.50
+• ETH: $3,490.35
+• SOL: $162.12
+• AVAX: $21.40
+• MATIC: $0.38
+• DOGE: $0.20
+• ADA: $0.73
+• DOT: $3.59
+• LINK: $16.30
+• UNI: $9.16
+
+🕐 Updated: 12:07:40 UTC
+```
+
+**Configuration:**
+Add `PRICE_SYMBOLS` to your `.env` file to customize which tokens to track:
+```env
+PRICE_SYMBOLS=BTC,ETH,SOL,AVAX,MATIC,DOGE,ADA,DOT,LINK,UNI
+```
+
+### `/position` Command
+Get instant position and account summary updates:
+
+**Example Response:**
+```
+🔥 Hyperliquid Positions Update
+
+📊 Account Summary
+• Account Equity: $3,085.52
+• Total Raw USD: $-44,903.61
+• Total Notional: $47,989.14
+• Margin Used: $2,202.65
+• Cross Leverage: 15.55x
+
+📈 Open Positions (2)
+
+ETH (LONG)
+• Size: 5.6700 ETH
+• Entry: $3,486.34 | Mark: $3,470.00
+• Unrealized PnL: 🔴 -$87.59 (-0.44%)
+• Liquidation: $3,122.30
+• Margin Required: $1,200.00
+• Leverage: 25.0x
+
+SOL (LONG)
+• Size: 175.0000 SOL
+• Entry: $163.46 | Mark: $161.75
+• Unrealized PnL: 🔴 -$300.03 (-1.05%)
+• Liquidation: $150.57
+• Margin Required: $1,002.65
+• Leverage: 20.0x
+
+🕐 Updated: 12:12:30 UTC
+```
+
+### `/help` Command
+Shows available commands and current configuration.
+
+### Available Commands Summary
+- **`/start`** - Show interactive button menu (recommended)
+- **`/prices`** - Get current token prices
+- **`/position`** - Get positions and account summary
+- **`/help`** - Show help information
+
+**💡 Pro Tip:** Use `/start` for the easiest interaction with inline buttons!
 
 ## 📤 Telegram Message Format
 
