@@ -271,6 +271,63 @@ class UnifiedHyperliquidMonitor:
             self.main_logger.error(f"❌ Unexpected error fetching account metrics: {e}")
             return None
     
+    def fetch_user_fills(self) -> Optional[List[Dict]]:
+        """Fetch last 10 order fills from Hyperliquid API"""
+        try:
+            payload = {
+                "type": "userFills",
+                "user": self.wallet_address
+            }
+            
+            self.bot_logger.info("📑 Fetching user fills from Hyperliquid API...")
+            response = requests.post(self.api_base_url, json=payload, timeout=30)
+            response.raise_for_status()
+            
+            data = response.json()
+            fills = data if isinstance(data, list) else []
+            
+            # Sort by timestamp (most recent first) and limit to 10
+            fills.sort(key=lambda x: x.get('time', 0), reverse=True)
+            recent_fills = fills[:10]
+            
+            self.bot_logger.info(f"✅ Successfully fetched {len(recent_fills)} recent fills")
+            return recent_fills
+            
+        except requests.exceptions.RequestException as e:
+            self.bot_logger.error(f"❌ Failed to fetch user fills: {e}")
+            return None
+        except Exception as e:
+            self.bot_logger.error(f"❌ Unexpected error fetching user fills: {e}")
+            return None
+    
+    def fetch_open_orders(self) -> Optional[List[Dict]]:
+        """Fetch open orders from Hyperliquid API"""
+        try:
+            payload = {
+                "type": "openOrders",
+                "user": self.wallet_address
+            }
+            
+            self.bot_logger.info("🧾 Fetching open orders from Hyperliquid API...")
+            response = requests.post(self.api_base_url, json=payload, timeout=30)
+            response.raise_for_status()
+            
+            data = response.json()
+            orders = data if isinstance(data, list) else []
+            
+            # Limit to 10 most recent orders
+            recent_orders = orders[:10]
+            
+            self.bot_logger.info(f"✅ Successfully fetched {len(recent_orders)} open orders")
+            return recent_orders
+            
+        except requests.exceptions.RequestException as e:
+            self.bot_logger.error(f"❌ Failed to fetch open orders: {e}")
+            return None
+        except Exception as e:
+            self.bot_logger.error(f"❌ Unexpected error fetching open orders: {e}")
+            return None
+    
     def format_telegram_message(self, positions: List[Dict], account_data: Dict, message_type: str = "scheduled") -> str:
         """Format position and account data into a Telegram message"""
         try:
@@ -376,6 +433,114 @@ class UnifiedHyperliquidMonitor:
             self.bot_logger.error(f"❌ Error formatting prices: {e}")
             return f"❌ Error formatting price data: {str(e)}"
     
+    def format_fills_markdown(self, fills: List[Dict]) -> str:
+        """Format order fills into a Telegram message"""
+        try:
+            if not fills:
+                return "📑 *Recent Fills*\n\n❌ No recent fills found."
+            
+            message = "📑 *Recent Order Fills*\n\n"
+            
+            for fill in fills:
+                # Extract fill data
+                coin = fill.get('coin', 'Unknown')
+                side_code = fill.get('side', 'Unknown')
+                size = float(fill.get('sz', 0))
+                price = float(fill.get('px', 0))
+                timestamp = fill.get('time', 0)
+                fee = float(fill.get('fee', 0))
+                closed_pnl = float(fill.get('closedPnl', 0))
+                
+                # Convert timestamp to readable format (timestamp is in milliseconds)
+                if timestamp:
+                    from datetime import timezone
+                    dt = datetime.fromtimestamp(timestamp / 1000, timezone.utc)
+                    # Format as MM/DD/YYYY - HH:MM:SS to match user's preference
+                    time_str = dt.strftime('%m/%d/%Y - %H:%M:%S')
+                else:
+                    time_str = 'Unknown'
+                
+                # Map side correctly for TAKER/MAKER roles
+                if side_code == 'A':  # 'A' = TAKER (aggressor)
+                    role = "TAKER"
+                    side_emoji = "🔹"
+                elif side_code == 'B':  # 'B' = MAKER (passive)
+                    role = "MAKER"
+                    side_emoji = "🔻"
+                else:
+                    role = side_code.upper()
+                    side_emoji = "🔸"
+                
+                # Calculate trade value
+                trade_value = size * price
+                
+                # Format PnL with appropriate emoji
+                if closed_pnl > 0:
+                    pnl_emoji = "🟢"
+                    pnl_sign = "+"
+                elif closed_pnl < 0:
+                    pnl_emoji = "🔴"
+                    pnl_sign = ""
+                else:
+                    pnl_emoji = "⚪"
+                    pnl_sign = ""
+                
+                message += f"⏰ *{time_str}*\n"
+                message += f"{side_emoji} *{coin}* | {role}\n"
+                message += f"💰 Price: ${price:,.2f} | Size: {size:,.4f} {coin}\n"
+                message += f"📊 Trade Value: ${trade_value:,.2f} USDC\n"
+                message += f"💸 Fee: ${fee:,.4f} USDC\n"
+                message += f"{pnl_emoji} Closed PnL: {pnl_sign}${closed_pnl:,.4f} USDC\n\n"
+            
+            # Use UTC time for consistency
+            from datetime import timezone
+            now_utc = datetime.now(timezone.utc)
+            message += f"🕐 *Updated*: {now_utc.strftime('%H:%M:%S UTC')}"
+            
+            return message
+            
+        except Exception as e:
+            self.bot_logger.error(f"❌ Error formatting fills: {e}")
+            return f"❌ Error formatting fills data: {str(e)}"
+    
+    def format_open_orders_markdown(self, orders: List[Dict]) -> str:
+        """Format open orders into a Telegram message"""
+        try:
+            if not orders:
+                return "🧾 *Open Orders*\n\n❌ No open orders found."
+            
+            message = "🧾 *Open Orders*\n\n"
+            
+            for order in orders:
+                # Extract order data
+                coin = order.get('coin', 'Unknown')
+                is_buy = order.get('isBuy', True)
+                size = float(order.get('sz', 0))
+                limit_px = float(order.get('limitPx', 0))
+                order_type = order.get('orderType', 'LIMIT').upper()
+                
+                # Determine side and emoji based on isBuy field
+                side = "BUY" if is_buy else "SELL"
+                emoji = "🟩" if is_buy else "🟥"
+                
+                # Determine order type display
+                if order_type == 'LIMIT':
+                    type_display = 'LIMIT'
+                elif order_type == 'STOP':
+                    type_display = 'STOP'
+                else:
+                    type_display = order_type
+                
+                message += f"{emoji} *{coin}* | {side} {size:,.4f} @ ${limit_px:,.2f} | {type_display}\n"
+            
+            message += f"\n🕐 *Updated*: {datetime.now().strftime('%H:%M:%S UTC')}"
+            
+            return message
+            
+        except Exception as e:
+            self.bot_logger.error(f"❌ Error formatting open orders: {e}")
+            return f"❌ Error formatting open orders data: {str(e)}"
+    
     def send_message(self, message: str, parse_mode: str = "Markdown", reply_markup: dict = None) -> bool:
         """Send message to Telegram"""
         try:
@@ -412,6 +577,10 @@ class UnifiedHyperliquidMonitor:
                         {"text": "📊 Position", "callback_data": "/position"},
                     ],
                     [
+                        {"text": "📑 Fills", "callback_data": "/fills"},
+                        {"text": "🧾 Open Orders", "callback_data": "/openorders"}
+                    ],
+                    [
                         {"text": "ℹ️ Help", "callback_data": "/help"}
                     ]
                 ]
@@ -423,7 +592,9 @@ class UnifiedHyperliquidMonitor:
 Welcome! Use the buttons below to interact with your Hyperliquid account:
 
 📈 *Prices* - Get current token prices
-📊 *Position* - View positions and account summary  
+📊 *Position* - View positions and account summary
+📑 *Fills* - View last 10 order fills
+🧾 *Open Orders* - View current open orders
 ℹ️ *Help* - Show detailed help information
 
 👇 *Select a command:*
@@ -586,6 +757,58 @@ Welcome! Use the buttons below to interact with your Hyperliquid account:
         else:
             self.bot_logger.error("❌ Failed to send position message")
     
+    def handle_fills_command(self):
+        """Handle /fills command"""
+        self.bot_logger.info("📑 Processing /fills command...")
+        
+        if not self.wallet_address:
+            error_msg = "❌ Wallet address not configured. Please set HL_WALLET_ADDRESS in your environment."
+            self.send_message(error_msg)
+            return
+        
+        # Fetch fills data
+        fills = self.fetch_user_fills()
+        
+        if fills is None:
+            error_msg = "❌ Unable to fetch fills data from Hyperliquid API"
+            self.send_message(error_msg)
+            return
+        
+        # Format and send fills
+        message = self.format_fills_markdown(fills)
+        success = self.send_message(message)
+        
+        if success:
+            self.bot_logger.info("✅ Fills command completed successfully")
+        else:
+            self.bot_logger.error("❌ Failed to send fills message")
+    
+    def handle_open_orders_command(self):
+        """Handle /openorders command"""
+        self.bot_logger.info("🧾 Processing /openorders command...")
+        
+        if not self.wallet_address:
+            error_msg = "❌ Wallet address not configured. Please set HL_WALLET_ADDRESS in your environment."
+            self.send_message(error_msg)
+            return
+        
+        # Fetch open orders data
+        orders = self.fetch_open_orders()
+        
+        if orders is None:
+            error_msg = "❌ Unable to fetch open orders data from Hyperliquid API"
+            self.send_message(error_msg)
+            return
+        
+        # Format and send open orders
+        message = self.format_open_orders_markdown(orders)
+        success = self.send_message(message)
+        
+        if success:
+            self.bot_logger.info("✅ Open orders command completed successfully")
+        else:
+            self.bot_logger.error("❌ Failed to send open orders message")
+    
     def handle_help_command(self):
         """Handle /help command"""
         help_text = f"""
@@ -593,6 +816,8 @@ Welcome! Use the buttons below to interact with your Hyperliquid account:
 
 • `/prices` - Get current token prices
 • `/position` - Get current positions and account summary
+• `/fills` - View last 10 order fills
+• `/openorders` - View current open orders
 • `/help` - Show this help message
 
 📊 *Configured Price Symbols*:
@@ -646,6 +871,10 @@ Welcome! Use the buttons below to interact with your Hyperliquid account:
                 self.handle_prices_command()
             elif callback_data == '/position':
                 self.handle_position_command()
+            elif callback_data == '/fills':
+                self.handle_fills_command()
+            elif callback_data == '/openorders':
+                self.handle_open_orders_command()
             elif callback_data == '/help':
                 self.handle_help_command()
             else:
@@ -671,6 +900,10 @@ Welcome! Use the buttons below to interact with your Hyperliquid account:
                 self.handle_prices_command()
             elif text == '/position' or text == '/positions':
                 self.handle_position_command()
+            elif text == '/fills':
+                self.handle_fills_command()
+            elif text == '/openorders':
+                self.handle_open_orders_command()
             elif text == '/start':
                 self.send_inline_command_menu()
             elif text == '/help':
