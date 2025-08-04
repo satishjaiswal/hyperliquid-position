@@ -31,85 +31,169 @@ class ConsoleFormatter:
         """Format and print positions summary to console."""
         
         if not positions:
-            self.console.print(Panel("❌ No active positions found.", title="📊 Position Summary"))
+            self.console.print(Panel(
+                "[red]❌ No active positions found.[/red]", 
+                title="[bold cyan]📊 Position Summary[/bold cyan]",
+                border_style="cyan"
+            ))
             return
         
-        # Account summary table
-        account_table = Table(show_header=False, box=None, padding=(0, 1))
-        account_table.add_column("Metric", style="bold cyan")
-        account_table.add_column("Value", style="bold white")
+        # Account summary table with enhanced styling
+        account_table = Table(
+            show_header=False, 
+            box=None, 
+            padding=(0, 2),
+            show_lines=False
+        )
+        account_table.add_column("Metric", style="bold bright_cyan", width=20)
+        account_table.add_column("Value", style="bold bright_white", width=25)
         
-        account_table.add_row("💰 Account Value", f"${account_summary.account_value:,.2f}")
+        # Account value with color coding
+        account_value_style = "bold bright_green" if account_summary.account_value > 0 else "bold bright_red"
+        account_table.add_row(
+            "💰 Account Value", 
+            f"[{account_value_style}]${account_summary.account_value:,.2f}[/{account_value_style}]"
+        )
         
+        # Total P&L with dynamic coloring
         total_pnl = sum(p.unrealized_pnl for p in positions)
-        pnl_style = "bold green" if total_pnl >= 0 else "bold red"
-        account_table.add_row("📈 Total P&L", f"${total_pnl:+,.2f}", style=pnl_style)
+        pnl_color = "bright_green" if total_pnl >= 0 else "bright_red"
+        pnl_symbol = "📈" if total_pnl >= 0 else "📉"
+        account_table.add_row(
+            f"{pnl_symbol} Total P&L", 
+            f"[bold {pnl_color}]${total_pnl:+,.2f}[/bold {pnl_color}]"
+        )
         
-        account_table.add_row("🔄 Cross Leverage", f"{account_summary.cross_leverage:.2f}x")
-        account_table.add_row("💳 Margin Used", f"${account_summary.total_margin_used:,.2f} ({account_summary.cross_margin_ratio:.1f}%)")
-        account_table.add_row("💵 Available", f"${account_summary.available_balance:,.2f}")
+        # Leverage with warning colors
+        leverage_color = "bright_red" if account_summary.cross_leverage > 20 else "bright_yellow" if account_summary.cross_leverage > 10 else "bright_green"
+        account_table.add_row(
+            "🔄 Cross Leverage", 
+            f"[bold {leverage_color}]{account_summary.cross_leverage:.2f}x[/bold {leverage_color}]"
+        )
+        
+        # Margin usage with risk coloring
+        margin_ratio = account_summary.cross_margin_ratio
+        margin_color = "bright_red" if margin_ratio > 90 else "bright_yellow" if margin_ratio > 70 else "bright_green"
+        account_table.add_row(
+            "💳 Margin Used", 
+            f"[bold {margin_color}]${account_summary.total_margin_used:,.2f} ({margin_ratio:.1f}%)[/bold {margin_color}]"
+        )
+        
+        # Available balance with color coding
+        available_color = "bright_red" if account_summary.available_balance < 0 else "bright_green"
+        account_table.add_row(
+            "💵 Available", 
+            f"[bold {available_color}]${account_summary.available_balance:,.2f}[/bold {available_color}]"
+        )
         
         # Portfolio metrics if provided
         if portfolio_metrics:
             account_table.add_row("", "")  # Spacer
-            account_table.add_row("📊 Total Positions", str(portfolio_metrics['total_positions']))
-            account_table.add_row("✅ Profitable", str(portfolio_metrics['profitable_positions']))
-            account_table.add_row("❌ Losing", str(portfolio_metrics['losing_positions']))
-            account_table.add_row("📏 Avg Leverage", f"{portfolio_metrics['average_leverage']:.2f}x")
-            account_table.add_row("🎯 Largest Position", f"${portfolio_metrics['largest_position_value']:,.2f}")
+            account_table.add_row(
+                "[dim]📊 Total Positions[/dim]", 
+                f"[bold bright_white]{portfolio_metrics['total_positions']}[/bold bright_white]"
+            )
+            account_table.add_row(
+                "[dim]✅ Profitable[/dim]", 
+                f"[bold bright_green]{portfolio_metrics['profitable_positions']}[/bold bright_green]"
+            )
+            account_table.add_row(
+                "[dim]❌ Losing[/dim]", 
+                f"[bold bright_red]{portfolio_metrics['losing_positions']}[/bold bright_red]"
+            )
+            account_table.add_row(
+                "[dim]📏 Avg Leverage[/dim]", 
+                f"[bold bright_cyan]{portfolio_metrics['average_leverage']:.2f}x[/bold bright_cyan]"
+            )
+            account_table.add_row(
+                "[dim]🎯 Largest Position[/dim]", 
+                f"[bold bright_magenta]${portfolio_metrics['largest_position_value']:,.2f}[/bold bright_magenta]"
+            )
         
-        # Positions table
-        positions_table = Table(title="🎯 Active Positions")
-        positions_table.add_column("#", style="dim", width=3)
-        positions_table.add_column("Symbol", style="bold")
-        positions_table.add_column("Side", style="bold")
-        positions_table.add_column("Size", justify="right")
-        positions_table.add_column("Entry", justify="right")
-        positions_table.add_column("Mark", justify="right")
-        positions_table.add_column("Liq", justify="right")
-        positions_table.add_column("P&L", justify="right")
-        positions_table.add_column("P&L %", justify="right")
-        positions_table.add_column("Leverage", justify="right")
-        positions_table.add_column("Margin", justify="right")
+        # Enhanced positions table with colorful styling
+        positions_table = Table(
+            title="[bold bright_cyan]🎯 Active Positions[/bold bright_cyan]",
+            border_style="bright_cyan",
+            header_style="bold bright_white on blue",
+            show_lines=True,
+            expand=True
+        )
+        
+        positions_table.add_column("#", style="dim white", width=4, justify="center")
+        positions_table.add_column("Symbol", style="bold bright_yellow", width=8, justify="center")
+        positions_table.add_column("Side", style="bold", width=6, justify="center")
+        positions_table.add_column("Size", justify="right", width=12)
+        positions_table.add_column("Entry", justify="right", width=12)
+        positions_table.add_column("Mark", justify="right", width=12)
+        positions_table.add_column("Liq", justify="right", width=12)
+        positions_table.add_column("P&L", justify="right", width=12)
+        positions_table.add_column("P&L %", justify="right", width=8)
+        positions_table.add_column("Leverage", justify="right", width=8)
+        positions_table.add_column("Margin", justify="right", width=12)
         
         # Sort positions by unrealized PnL (most profitable first)
         sorted_positions = sorted(positions, key=lambda p: p.unrealized_pnl, reverse=True)
         
         for i, position in enumerate(sorted_positions, 1):
-            side_style = "green" if position.side.value == "LONG" else "red"
-            pnl_style = "green" if position.is_profitable else "red"
+            # Dynamic styling based on position characteristics
+            side_color = "bright_green" if position.side.value == "LONG" else "bright_red"
+            side_icon = "📈" if position.side.value == "LONG" else "📉"
+            
+            pnl_color = "bright_green" if position.is_profitable else "bright_red"
+            pnl_bg = "on green" if position.is_profitable else "on red"
+            
+            # Risk level coloring for leverage
+            lev_color = "bright_red" if position.leverage > 25 else "bright_yellow" if position.leverage > 15 else "bright_green"
+            
+            # Liquidation distance coloring
+            liq_distance = abs(position.mark_price - position.liq_price) / position.mark_price * 100
+            liq_color = "bright_red" if liq_distance < 5 else "bright_yellow" if liq_distance < 15 else "bright_green"
             
             positions_table.add_row(
-                str(i),
-                position.symbol,
-                position.side.value,
-                f"{position.size:,.4f}",
-                f"${position.entry_price:,.4f}",
-                f"${position.mark_price:,.4f}",
-                f"${position.liq_price:,.4f}",
-                f"${position.unrealized_pnl:+,.2f}",
-                f"{position.pnl_percentage:+.2f}%",
-                f"{position.leverage:.1f}x",
-                f"${position.margin_used:,.2f}",
-                style=pnl_style if i > 3 else None  # Only color rows after first 3
+                f"[dim]{i}[/dim]",
+                f"[bold bright_yellow]{position.symbol}[/bold bright_yellow]",
+                f"[bold {side_color}]{side_icon} {position.side.value[:4]}[/bold {side_color}]",
+                f"[bright_white]{position.size:,.4f}[/bright_white]",
+                f"[bright_cyan]${position.entry_price:,.4f}[/bright_cyan]",
+                f"[bright_magenta]${position.mark_price:,.4f}[/bright_magenta]",
+                f"[{liq_color}]${position.liq_price:,.4f}[/{liq_color}]",
+                f"[bold {pnl_color}]${position.unrealized_pnl:+,.2f}[/bold {pnl_color}]",
+                f"[bold {pnl_color}]{position.pnl_percentage:+.2f}%[/bold {pnl_color}]",
+                f"[bold {lev_color}]{position.leverage:.1f}x[/bold {lev_color}]",
+                f"[bright_white]${position.margin_used:,.2f}[/bright_white]"
             )
         
-        # Display everything
-        self.console.print(Panel(account_table, title="📊 Account Summary"))
+        # Display everything with enhanced panels
+        self.console.print(Panel(
+            account_table, 
+            title="[bold bright_cyan]📊 Account Summary[/bold bright_cyan]",
+            border_style="bright_cyan",
+            padding=(1, 2)
+        ))
         self.console.print(positions_table)
     
     def format_prices_table(self, price_collection: PriceCollection, symbols: List[str]) -> None:
         """Format and print price data to console."""
         
         if len(price_collection) == 0:
-            self.console.print(Panel("❌ No price data available.", title="📈 Token Prices"))
+            self.console.print(Panel(
+                "[red]❌ No price data available.[/red]", 
+                title="[bold bright_cyan]📈 Token Prices[/bold bright_cyan]",
+                border_style="bright_cyan"
+            ))
             return
         
-        # Create price table
-        price_table = Table(title="📈 Token Prices")
-        price_table.add_column("Symbol", style="bold cyan")
-        price_table.add_column("Price", justify="right", style="bold white")
-        price_table.add_column("Age", justify="right", style="dim")
+        # Enhanced price table with colorful styling
+        price_table = Table(
+            title="[bold bright_cyan]📈 Token Prices[/bold bright_cyan]",
+            border_style="bright_cyan",
+            header_style="bold bright_white on blue",
+            show_lines=True,
+            expand=True
+        )
+        price_table.add_column("💰 Symbol", style="bold bright_yellow", width=12, justify="center")
+        price_table.add_column("💵 Price", justify="right", style="bold bright_green", width=15)
+        price_table.add_column("⏰ Age", justify="right", style="dim bright_white", width=10)
         
         # Filter and sort requested symbols
         found_symbols = []
@@ -125,12 +209,26 @@ class ConsoleFormatter:
         # Sort by symbol name
         found_symbols.sort(key=lambda x: x[0])
         
-        # Add found prices
+        # Add found prices with enhanced styling
         for symbol, price_data in found_symbols:
-            age_text = f"{price_data.age_seconds:.0f}s"
+            age_seconds = price_data.age_seconds
+            age_color = "bright_red" if age_seconds > 60 else "bright_yellow" if age_seconds > 30 else "bright_green"
+            age_text = f"[{age_color}]{age_seconds:.0f}s[/{age_color}]"
+            
+            # Price formatting with dynamic colors based on value
+            price_value = price_data.price
+            if price_value > 1000:
+                price_color = "bright_magenta"
+            elif price_value > 100:
+                price_color = "bright_cyan"
+            elif price_value > 10:
+                price_color = "bright_green"
+            else:
+                price_color = "bright_yellow"
+            
             price_table.add_row(
-                symbol,
-                f"${price_data.price:,.4f}",
+                f"[bold bright_yellow]{symbol}[/bold bright_yellow]",
+                f"[bold {price_color}]${price_value:,.4f}[/bold {price_color}]",
                 age_text
             )
         
@@ -138,12 +236,17 @@ class ConsoleFormatter:
         
         # Show missing symbols if any
         if missing_symbols:
-            missing_text = Text(f"❌ Not found: {', '.join(missing_symbols)}", style="red")
-            self.console.print(missing_text)
+            self.console.print(Panel(
+                f"[red]❌ Not found: {', '.join(missing_symbols)}[/red]",
+                border_style="red"
+            ))
         
-        # Add timestamp
-        timestamp = Text(f"🕐 Updated: {datetime.now().strftime('%H:%M:%S')}", style="dim")
-        self.console.print(timestamp)
+        # Add timestamp with styling
+        timestamp_panel = Panel(
+            f"[dim bright_white]🕐 Updated: {datetime.now().strftime('%H:%M:%S')}[/dim bright_white]",
+            border_style="dim"
+        )
+        self.console.print(timestamp_panel)
     
     def format_fills_table(self, fills: List[OrderFill]) -> None:
         """Format and print order fills to console."""

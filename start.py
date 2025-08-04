@@ -227,23 +227,43 @@ class HyperliquidStarter:
         print("   • Chat ID: Send a message to @userinfobot on Telegram")
         print()
     
-    def run_application(self):
-        """Run the main application."""
-        self.print_step("Starting Hyperliquid Position Monitor...")
+    def activate_venv_and_run(self):
+        """Activate virtual environment and run the application."""
+        self.print_step("Activating virtual environment and starting application...")
         
         try:
             # Change to project directory
             os.chdir(self.project_root)
             
-            # Add src to Python path and run
+            # Prepare environment with virtual environment activated
             env = os.environ.copy()
+            
+            # Add virtual environment to PATH
+            if self.is_windows:
+                venv_scripts = str(self.venv_path / "Scripts")
+                env["PATH"] = f"{venv_scripts}{os.pathsep}{env.get('PATH', '')}"
+            else:
+                venv_bin = str(self.venv_path / "bin")
+                env["PATH"] = f"{venv_bin}{os.pathsep}{env.get('PATH', '')}"
+            
+            # Set VIRTUAL_ENV environment variable
+            env["VIRTUAL_ENV"] = str(self.venv_path)
+            
+            # Remove PYTHONHOME if it exists (can interfere with venv)
+            env.pop("PYTHONHOME", None)
+            
+            # Add src to Python path
             src_path = str(self.project_root / "src")
             if "PYTHONPATH" in env:
                 env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
             else:
                 env["PYTHONPATH"] = src_path
             
-            # Run the application
+            print("   Virtual environment activated")
+            print(f"   Using Python: {self.venv_python}")
+            print()
+            
+            # Run the application with activated environment
             subprocess.run([
                 str(self.venv_python), "run.py"
             ], env=env, check=True)
@@ -257,6 +277,10 @@ class HyperliquidStarter:
             self.print_error(f"Unexpected error: {e}")
             sys.exit(1)
     
+    def run_application(self):
+        """Run the main application (legacy method for compatibility)."""
+        self.activate_venv_and_run()
+    
     def print_manual_activation_help(self):
         """Print help for manual virtual environment activation."""
         print()
@@ -269,6 +293,72 @@ class HyperliquidStarter:
         print("Then run:")
         print("   python run.py")
         print()
+    
+    def print_activation_instructions(self):
+        """Print instructions for activating the virtual environment."""
+        self.print_success("Virtual environment setup complete!")
+        print("🔧 To activate the virtual environment manually:")
+        print()
+        if self.is_windows:
+            print(f"   {self.activate_script}")
+        else:
+            print(f"   source {self.activate_script}")
+        print()
+        print("📋 Available commands after activation:")
+        print("   python run.py          # Run the position monitor")
+        print("   python -m pip list     # List installed packages")
+        print("   python -m pip install <package>  # Install additional packages")
+        print()
+        print("💡 To deactivate the virtual environment:")
+        print("   deactivate")
+        print()
+    
+    def start_interactive_shell(self):
+        """Start an interactive shell with virtual environment activated."""
+        self.print_step("Starting interactive shell with virtual environment...")
+        
+        try:
+            # Prepare environment with virtual environment activated
+            env = os.environ.copy()
+            
+            # Add virtual environment to PATH
+            if self.is_windows:
+                venv_scripts = str(self.venv_path / "Scripts")
+                env["PATH"] = f"{venv_scripts}{os.pathsep}{env.get('PATH', '')}"
+                shell_cmd = ["cmd.exe"]
+            else:
+                venv_bin = str(self.venv_path / "bin")
+                env["PATH"] = f"{venv_bin}{os.pathsep}{env.get('PATH', '')}"
+                shell_cmd = [env.get("SHELL", "/bin/bash")]
+            
+            # Set VIRTUAL_ENV environment variable
+            env["VIRTUAL_ENV"] = str(self.venv_path)
+            
+            # Remove PYTHONHOME if it exists (can interfere with venv)
+            env.pop("PYTHONHOME", None)
+            
+            # Add src to Python path
+            src_path = str(self.project_root / "src")
+            if "PYTHONPATH" in env:
+                env["PYTHONPATH"] = f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
+            else:
+                env["PYTHONPATH"] = src_path
+            
+            # Change to project directory
+            os.chdir(self.project_root)
+            
+            print("   Virtual environment activated")
+            print(f"   Using Python: {self.venv_python}")
+            print("   Type 'exit' to close the shell")
+            print()
+            
+            # Start interactive shell
+            subprocess.run(shell_cmd, env=env)
+            
+        except KeyboardInterrupt:
+            print("\n🛑 Shell interrupted by user")
+        except Exception as e:
+            self.print_error(f"Failed to start interactive shell: {e}")
     
     def run(self):
         """Run the complete startup process."""
@@ -313,8 +403,38 @@ class HyperliquidStarter:
 
 def main():
     """Main entry point."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Hyperliquid Position Monitor Startup Script")
+    parser.add_argument(
+        "--activate-only", 
+        action="store_true", 
+        help="Only activate virtual environment without running the application"
+    )
+    parser.add_argument(
+        "--shell", 
+        action="store_true", 
+        help="Start an interactive shell with virtual environment activated"
+    )
+    
+    args = parser.parse_args()
+    
     starter = HyperliquidStarter()
-    starter.run()
+    
+    if args.activate_only or args.shell:
+        # Setup environment without running the application
+        starter.print_header()
+        starter.check_python_version()
+        starter.create_venv()
+        starter.upgrade_pip()
+        starter.install_requirements()
+        
+        if args.shell:
+            starter.start_interactive_shell()
+        else:
+            starter.print_activation_instructions()
+    else:
+        starter.run()
 
 
 if __name__ == "__main__":
