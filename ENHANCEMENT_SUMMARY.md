@@ -108,6 +108,39 @@ Both files have been syntax-checked and compiled successfully:
 - **Solution**: Updated to use `datetime.fromtimestamp(timestamp, timezone.utc)`
 - **Impact**: Future-proof timezone-aware datetime handling
 
+### BUY/SELL Detection Fix
+- **Issue**: All orders showing as BUY due to default value `True` in `order.get('isBuy', True)`
+- **Solution**: Removed default value and added explicit boolean checking
+- **Logic**: `is_buy is True` → BUY (🟩), `is_buy is False` → SELL (🟥), `else` → UNKNOWN (🔸)
+- **Impact**: Accurate BUY/SELL detection for open orders
+
+### Correct Side Field Mapping (Final Fix)
+- **Issue**: Incorrect field usage - was looking for `isBuy` boolean field
+- **Solution**: Use correct `side` field mapping from Hyperliquid SDK
+- **Mapping**: 
+  - `side: 'A'` = BUY (🟩)
+  - `side: 'B'` = SELL (🟥)
+- **Reference**: Based on official Hyperliquid Python SDK types.py
+- **Impact**: Accurate BUY/SELL detection for open orders using correct API field
+
+### Enhanced Debugging for Order Detection
+- **Added**: Comprehensive logging of raw order data from API
+- **Features**: 
+  - Logs complete order structure for analysis
+  - Tries multiple field name variations (`coin`/`symbol`, `sz`/`size`, `limitPx`/`px`/`price`)
+  - Warning logs when order side cannot be determined
+- **Purpose**: Identify exact API response format and validate correct field usage
+
+### Null Safety Fix for Position Data
+- **Issue**: `float() argument must be a string or a real number, not 'NoneType'` error
+- **Root Cause**: API returning `null` values for position fields like `szi`, `entryPx`, etc.
+- **Solution**: Added comprehensive null checks before float conversion
+- **Implementation**: 
+  - Check `szi` field for `None` before processing position
+  - Safe conversion: `float(value) if value is not None else 0.0`
+  - Applied to all numeric fields: `entryPx`, `liquidationPx`, `unrealizedPnl`, `marginUsed`, `leverage`
+- **Impact**: Prevents crashes when API returns incomplete position data
+
 ## 📝 Notes
 
 - The enhancement maintains full backward compatibility

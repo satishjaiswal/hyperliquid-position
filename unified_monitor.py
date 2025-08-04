@@ -186,30 +186,45 @@ class UnifiedHyperliquidMonitor:
             for pos in positions:
                 # Extract position data from nested structure
                 position_data = pos.get("position", {})
-                size = abs(float(position_data.get("szi", 0)))
+                
+                # Safely extract size with null check
+                szi_value = position_data.get("szi")
+                if szi_value is None:
+                    continue  # Skip if no size data
+                
+                size = abs(float(szi_value))
                 
                 # Skip zero-size positions (not open)
                 if size == 0:
                     continue
                 
-                side = "LONG" if float(position_data.get("szi", 0)) > 0 else "SHORT"
+                side = "LONG" if float(szi_value) > 0 else "SHORT"
                 coin = position_data.get('coin', 'Unknown')
                 symbols_to_fetch.append(coin)
                 
-                # Extract leverage value from nested structure
+                # Extract leverage value from nested structure with null checks
                 leverage_data = position_data.get("leverage", {})
-                leverage_value = leverage_data.get("value", 1) if isinstance(leverage_data, dict) else leverage_data
+                if isinstance(leverage_data, dict):
+                    leverage_value = leverage_data.get("value", 1)
+                else:
+                    leverage_value = leverage_data
+                
+                # Safely convert all numeric fields with null checks
+                entry_px = position_data.get("entryPx", 0)
+                liq_px = position_data.get("liquidationPx", 0)
+                unrealized_pnl = position_data.get("unrealizedPnl", 0)
+                margin_used = position_data.get("marginUsed", 0)
                 
                 active_positions.append({
                     "symbol": coin,
                     "side": side,
                     "size": size,
-                    "entry_price": float(position_data.get("entryPx", 0)),
+                    "entry_price": float(entry_px) if entry_px is not None else 0.0,
                     "mark_price": 0,  # Will be updated below
-                    "liq_price": float(position_data.get("liquidationPx", 0)),
-                    "unrealized_pnl": float(position_data.get("unrealizedPnl", 0)),
-                    "leverage": float(leverage_value),
-                    "margin_used": float(position_data.get("marginUsed", 0))
+                    "liq_price": float(liq_px) if liq_px is not None else 0.0,
+                    "unrealized_pnl": float(unrealized_pnl) if unrealized_pnl is not None else 0.0,
+                    "leverage": float(leverage_value) if leverage_value is not None else 1.0,
+                    "margin_used": float(margin_used) if margin_used is not None else 0.0
                 })
             
             # Fetch mark prices for all symbols
@@ -512,16 +527,31 @@ class UnifiedHyperliquidMonitor:
             message = "🧾 *Open Orders*\n\n"
             
             for order in orders:
-                # Extract order data
-                coin = order.get('coin', 'Unknown')
-                is_buy = order.get('isBuy', True)
-                size = float(order.get('sz', 0))
-                limit_px = float(order.get('limitPx', 0))
-                order_type = order.get('orderType', 'LIMIT').upper()
+                # Debug: Log the raw order data to understand the structure
+                self.bot_logger.info(f"🔍 Raw order data: {order}")
                 
-                # Determine side and emoji based on isBuy field
-                side = "BUY" if is_buy else "SELL"
-                emoji = "🟩" if is_buy else "🟥"
+                # Extract order data - try multiple possible field names
+                coin = order.get('coin', order.get('symbol', 'Unknown'))
+                size = float(order.get('sz', order.get('size', 0)))
+                limit_px = float(order.get('limitPx', order.get('px', order.get('price', 0))))
+                order_type = order.get('orderType', order.get('type', 'LIMIT')).upper()
+                
+                # Get side field - according to Hyperliquid SDK: 'A' = sell, 'B' = buy
+                side_code = order.get('side', '')
+                
+                # Determine side and emoji based on side field
+                if side_code == 'A':  # 'A' = SELL
+                    side = "SELL"
+                    emoji = "🟥"
+                elif side_code == 'B':  # 'B' = BUY
+                    side = "BUY"
+                    emoji = "🟩"
+                else:
+                    # Fallback if side field is missing or unknown
+                    side = "UNKNOWN"
+                    emoji = "🔸"
+                    # Log this case for debugging
+                    self.bot_logger.warning(f"⚠️ Could not determine order side for {coin}. side={side_code}, raw order: {order}")
                 
                 # Determine order type display
                 if order_type == 'LIMIT':
