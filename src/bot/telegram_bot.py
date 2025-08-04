@@ -148,7 +148,7 @@ class TelegramBot:
         """Handle /help command."""
         success = self.telegram_service.send_help_message(
             self.settings.price_symbols,
-            self.settings.refresh_interval_seconds
+            self.settings.refresh_interval
         )
         
         if not success:
